@@ -1,0 +1,118 @@
+---
+title: "test"
+format: html
+---
+
+Hier ein Test
+
+```{r}
+#| warning: FALSE
+
+library(tidyverse)
+library(ggplot2)
+library(gganimate)
+library(ggthemes)
+library(lubridate)
+library(gifski)
+
+jobxp_aug <- read_table("data\\jobxp_luis_aug.txt", 
+                                 col_names = FALSE)
+
+colnames(jobxp_aug) <- c("tag","zeit","platz","spieler","wert","x6")
+
+jobxp_aug$spieler[jobxp_aug$spieler == "nullKissenschlachtAT"] <- "KissenschlachtAT"
+
+jobxp_aug <- jobxp_aug[-c(6)] %>% 
+  mutate(timestamp = paste(tag, zeit)) %>% 
+  filter(month(tag) == 8) %>% 
+  arrange(timestamp) %>% 
+  group_by(timestamp) %>% 
+  slice_head(n = 10) %>% 
+  ungroup()
+
+# jobxp <- jobxp[-(1:250),] %>% 
+  
+jobxp_aug <- jobxp_aug %>% 
+  mutate(timestamp = as.POSIXct(timestamp),
+         wert = as.numeric(gsub("\\.", "", wert)),
+         spieler = if_else(spieler == "CronesNumeroUn0", "CronesNumeroUni", spieler),
+         gilde = case_when(
+           spieler %in% c("_AT","KissenschlachtAT","Hoddock","Kisssen","AFKissen","Wasserschlacht","Kissenschlachti","KissenschlachtQA","jey27600","Luiiis","Plotwal","DetectiveGatow","Gissen","zY8") ~ "error",
+           spieler %in% c("Crones_Trinkerin","L3AXxx","PantherChef","Svooo","hundeliebhaber08","eriikaaa","TeamCrones","Dentoox","Crones_Pat","goldlampe","Crones_Rhaegal","Crones_AryaStark","Tomkingo","dontrealize","Crones_lampe","CR0NES","WarpArmortrims","Duchio21","CronesNumeroUn0","Crones_JonSnow","CronesNumeroUno","BlvckMamba") ~ "Crones",
+           spieler %in% c("SentToHell","HydraakaFelix","Flumooo") ~ "HYPERS",
+           spieler %in% c("Itssantino","Lenmax","Toaster1401","Spacereihu","LucaK2805","SplashVIIII","KleinerWolf2310","xxVicKiexx") ~ "monoton",
+           spieler %in% c("matsdermacher","_zukiii","xKevvo","Realaty197","BieKz","Kuschelhase08","Jirencool","Trakaitom","Cayex","Tuvi_Jah") ~ "Allay",
+           spieler %in% c("sonomagruenerRS6","IcyHYDRA121","xRenix_") ~ "RotFuchs",
+           spieler %in% c("blackpantherMC") ~ "EvilUnity",
+           spieler %in% c("nils_exc","GampertPower") ~ "Immortals",
+           spieler %in% c("Maadness") ~ "Shinobi_World",
+         TRUE ~ "Unbekannt")) %>% 
+  mutate(gilde2 = case_when(
+           gilde == "Crones" ~ "Crones",
+           gilde == "error" ~ "error",
+           gilde == "EvilUnity" ~ "EvilUnity",
+           gilde == "RotFuchs" ~ "RotFuchs",
+           gilde == "Allay" ~ "Allay"))
+
+jobxp_aug$gilde2 <- factor(jobxp_aug$gilde2, levels = c("error","EvilUnity","Crones","Allay","RotFuchs"))
+
+######################################################
+
+jobxp_aug24 <- ggplot(jobxp_aug, aes(x = platz, y = wert, fill = gilde2)) +
+  geom_hline(yintercept = c(500000, 1000000), color = "gray30") +
+  geom_bar(stat = "identity", position = "dodge") +
+  coord_flip()  +
+  scale_x_reverse() +
+  scale_y_continuous(breaks = c(500000,1000000),
+                     labels = c("500k","1000k"),
+                     limits = c(-400000,1500000),
+                     sec.axis = dup_axis(
+                       breaks = c(500000, 1000000),
+                       labels = c("500k", "1000k"))) +
+  geom_text(aes(label = spieler),
+            hjust = "right",
+            y = -30000,
+            size = 4.5,
+            color = "gray90") + 
+  geom_text(aes(label = paste(round(wert/1000,1))),
+            position = position_dodge(width = 0.9),
+            vjust = 0.4,
+            hjust = -0.05,
+            size = 5,
+            color = "gray90") +
+  geom_text(aes(label = paste("Tag:", format(tag, "%d"))),
+            size = 10,
+            x = -9.5,
+            y = 1350000,
+            color = "gray90") +
+  labs(title = "Job-XP-Ranking August 2024",
+       x = NULL, y = NULL,
+       caption = "Visualization by @realDuesterwald") +
+  theme_minimal() +
+  scale_fill_discrete(na.translate = FALSE) +
+  # guides(fill = guide_legend(override.aes = list(size = 8))) +
+  theme(axis.line.y = element_blank(),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.text.x = element_blank(),
+        axis.text.x.top = element_text(size = 12, color = "gray50"),
+        legend.title = element_blank(),
+        legend.text = element_text(color = "gray90", size = 10),
+        # legend.position = "none",
+        plot.title = element_text(face = "bold", color = "gray90", hjust = 1.12, size = 30, margin = margin(t = 10, b = 5)),
+        plot.caption = element_text(size = 12, hjust = 0.385, color = "gray75", margin = margin(b = 10)),
+        plot.background = element_rect(fill = "#36393F", color = NA), # Hintergrundfarbe des Plots
+        panel.background = element_rect(fill = "#36393F", color = NA), # Hintergrundfarbe des Panels
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank()) +
+  transition_time(timestamp) +
+  ease_aes("linear")
+
+animate(jobxp_aug24, width = 600, height = 401, fps = 30, duration = 20, end_pause = 50)
+
+
+# anim_save("jobxp_aug24.gif", jobxp_aug24)
+  
+```
+
